@@ -9,6 +9,7 @@ Free a TCP Port by terminating its Listener.
 ```
 killport 8080
 killport 3000 8080 4200
+killport -n 3000 8080
 ```
 
 Default output shows each Occupant's Port, PID, and process name, then a short success line:
@@ -17,6 +18,8 @@ Default output shows each Occupant's Port, PID, and process name, then a short s
 Port 8080  PID 4242  node
 Killed 1 Occupant with SIGKILL.
 ```
+
+`-n` / `--dry-run` lists Occupants the same way and exits 0 without signalling. `-v` / `--verbose` shows each Occupant's full command line. `-h` / `--help` and `-V` / `--version` work without a Port.
 
 An already-free Port is success: `killport` prints that nothing is listening and exits 0.
 

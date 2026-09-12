@@ -10,12 +10,45 @@ import (
 	"github.com/jawharmed/kill-port/internal/proctable"
 )
 
+// Version is the killport build identity. Release builds override it via ldflags.
+var Version = "0.0.0-dev"
+
+const helpText = `Usage: killport [flags] <port> [port...]
+
+Free a TCP Port by terminating its Listener (TCP LISTEN Occupant).
+
+Flags:
+  -h, --help       Show this help and exit; no Port required
+  -V, --version    Print the version and exit; no Port required
+  -n, --dry-run    List Occupants without signalling
+  -v, --verbose    Show each Occupant's full command line
+
+Examples:
+  killport 8080
+  killport 3000 8080
+  killport -n 3000 8080
+  killport -n -v 8080
+`
+
 func Run(args []string, table proctable.ProcessTable, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
+	parsed, err := parseArgs(args)
+	if err != nil {
+		fmt.Fprintln(stderr, err.Error())
+		return 1
+	}
+	if parsed.help {
+		fmt.Fprint(stdout, helpText)
+		return 0
+	}
+	if parsed.version {
+		fmt.Fprintf(stdout, "killport version %s\n", Version)
+		return 0
+	}
+	if len(parsed.ports) == 0 {
 		fmt.Fprintln(stderr, "Usage: killport <port> [port...]")
 		return 1
 	}
-	ports, err := parsePorts(args)
+	ports, err := parsePorts(parsed.ports)
 	if err != nil {
 		fmt.Fprintln(stderr, err.Error())
 		return 1
@@ -34,7 +67,14 @@ func Run(args []string, table proctable.ProcessTable, stdout, stderr io.Writer) 
 			continue
 		}
 		for _, occupant := range occupants {
-			fmt.Fprintf(stdout, "Port %d  PID %d  %s\n", occupant.Port, occupant.PID, occupant.Name)
+			label := occupant.Name
+			if parsed.verbose && occupant.Command != "" {
+				label = occupant.Command
+			}
+			fmt.Fprintf(stdout, "Port %d  PID %d  %s\n", occupant.Port, occupant.PID, label)
+			if parsed.dryRun {
+				continue
+			}
 			if _, already := signalled[occupant.PID]; already {
 				continue
 			}
@@ -68,6 +108,36 @@ func writeKilled(stdout io.Writer, killed int) {
 		noun = "Occupants"
 	}
 	fmt.Fprintf(stdout, "Killed %d %s with SIGKILL.\n", killed, noun)
+}
+
+type parsedArgs struct {
+	help    bool
+	version bool
+	dryRun  bool
+	verbose bool
+	ports   []string
+}
+
+func parseArgs(args []string) (parsedArgs, error) {
+	parsed := parsedArgs{ports: make([]string, 0, len(args))}
+	for _, arg := range args {
+		switch arg {
+		case "-h", "--help":
+			parsed.help = true
+		case "-V", "--version":
+			parsed.version = true
+		case "-n", "--dry-run":
+			parsed.dryRun = true
+		case "-v", "--verbose":
+			parsed.verbose = true
+		default:
+			if strings.HasPrefix(arg, "-") && arg != "-" {
+				return parsedArgs{}, fmt.Errorf("Unknown flag: %s\nSee killport --help", arg)
+			}
+			parsed.ports = append(parsed.ports, arg)
+		}
+	}
+	return parsed, nil
 }
 
 func parsePorts(args []string) ([]proctable.Port, error) {
