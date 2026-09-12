@@ -1,8 +1,8 @@
 # killport
 
-Free a TCP Port by terminating its Listener.
+Free a TCP Port by terminating its Occupant.
 
-`killport` is a local Developer tool. Name one or more Ports; it finds the Listeners (TCP LISTEN) and terminates them immediately with SIGKILL.
+`killport` is a local Developer tool. Name one or more Ports; by default it finds the Listeners (TCP LISTEN) and terminates them immediately with SIGKILL. Pass `--all` to also terminate Peers.
 
 ## Usage
 
@@ -10,6 +10,7 @@ Free a TCP Port by terminating its Listener.
 killport 8080
 killport 3000 8080 4200
 killport -n 3000 8080
+killport --all 8080
 ```
 
 Default output shows each Occupant's Port, PID, and process name, then a short success line:
@@ -21,11 +22,13 @@ Killed 1 Occupant with SIGKILL.
 
 `-n` / `--dry-run` lists Occupants the same way and exits 0 without signalling. `-v` / `--verbose` shows each Occupant's full command line. `-h` / `--help` and `-V` / `--version` work without a Port.
 
+`-a` / `--all` targets Listeners and Peers (non-LISTEN TCP) on the named Ports. `-l` / `--listen` forces Listener-only targeting (the default), including to undo `--all` in the same command. If both appear, the last one wins.
+
 An already-free Port is success: `killport` prints that nothing is listening and exits 0.
 
 IPv4 and IPv6 Listeners on the same Port number are both targeted. A dual-stack Occupant, or a PID that occupies two named Ports, is signalled only once.
 
-Connected Peers (non-LISTEN TCP) are left alone.
+By default, connected Peers are left alone.
 
 ## Errors
 

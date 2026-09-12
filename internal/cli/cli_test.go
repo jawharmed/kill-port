@@ -23,10 +23,13 @@ func TestHelp_PrintsEnglishUsageFlagsAndExamplesWithoutPort(t *testing.T) {
 			if !strings.Contains(stdout, "Usage: killport") {
 				t.Fatalf("stdout = %q, want English usage", stdout)
 			}
-			for _, want := range []string{"-h", "--help", "-V", "--version", "-n", "--dry-run", "-v", "--verbose"} {
+			for _, want := range []string{"-h, --help", "-V, --version", "-n, --dry-run", "-v, --verbose", "-a, --all", "-l, --listen"} {
 				if !strings.Contains(stdout, want) {
 					t.Fatalf("stdout = %q, want flag %s", stdout, want)
 				}
+			}
+			if !strings.Contains(stdout, "Listeners and Peers") {
+				t.Fatalf("stdout = %q, want --all spelled out as Listeners and Peers", stdout)
 			}
 			if !strings.Contains(stdout, "killport 8080") {
 				t.Fatalf("stdout = %q, want a usage example", stdout)
@@ -472,12 +475,170 @@ func TestPeer_IsNotTargetedByDefault(t *testing.T) {
 		memory.Occupant{PID: 4242, Port: 8080, Name: "node", Kind: proctable.Listener},
 	)
 
-	_, _, exit := run(t, table, "8080")
+	stdout, _, exit := run(t, table, "8080")
 	if exit != 0 {
 		t.Fatalf("exit code = %d, want 0", exit)
 	}
+	if strings.Contains(stdout, "curl") {
+		t.Fatalf("stdout = %q, want Peers omitted by default", stdout)
+	}
 	if got := table.ForcedPIDs(); len(got) != 1 || got[0] != 4242 {
 		t.Fatalf("forced PIDs = %v, want Listener [4242] only", got)
+	}
+}
+
+func TestAll_TargetsListenersAndPeers(t *testing.T) {
+	for _, flag := range []string{"-a", "--all"} {
+		t.Run(flag, func(t *testing.T) {
+			table := memory.New(
+				memory.Occupant{PID: 4242, Port: 8080, Name: "node", Kind: proctable.Listener},
+				memory.Occupant{PID: 99, Port: 8080, Name: "curl", Kind: proctable.Peer},
+			)
+
+			stdout, stderr, exit := run(t, table, flag, "8080")
+			if exit != 0 {
+				t.Fatalf("exit code = %d, want 0", exit)
+			}
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want empty", stderr)
+			}
+			if !strings.Contains(stdout, "Port 8080  PID 4242  node") {
+				t.Fatalf("stdout = %q, want Listener listed", stdout)
+			}
+			if !strings.Contains(stdout, "Port 8080  PID 99  curl") {
+				t.Fatalf("stdout = %q, want Peer listed", stdout)
+			}
+			if !strings.Contains(stdout, "Killed 2 Occupants with SIGKILL.") {
+				t.Fatalf("stdout = %q, want both Occupants killed", stdout)
+			}
+			if got := table.ForcedPIDs(); len(got) != 2 || got[0] != 4242 || got[1] != 99 {
+				t.Fatalf("forced PIDs = %v, want [4242 99]", got)
+			}
+			if got := table.PolitePIDs(); len(got) != 0 {
+				t.Fatalf("polite PIDs = %v, want none", got)
+			}
+		})
+	}
+}
+
+func TestListen_TargetsListenersOnly(t *testing.T) {
+	for _, flag := range []string{"-l", "--listen"} {
+		t.Run(flag, func(t *testing.T) {
+			table := memory.New(
+				memory.Occupant{PID: 4242, Port: 8080, Name: "node", Kind: proctable.Listener},
+				memory.Occupant{PID: 99, Port: 8080, Name: "curl", Kind: proctable.Peer},
+			)
+
+			stdout, stderr, exit := run(t, table, flag, "8080")
+			if exit != 0 {
+				t.Fatalf("exit code = %d, want 0", exit)
+			}
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want empty", stderr)
+			}
+			if !strings.Contains(stdout, "Port 8080  PID 4242  node") {
+				t.Fatalf("stdout = %q, want Listener listed", stdout)
+			}
+			if strings.Contains(stdout, "curl") {
+				t.Fatalf("stdout = %q, want Peers omitted", stdout)
+			}
+			if got := table.ForcedPIDs(); len(got) != 1 || got[0] != 4242 {
+				t.Fatalf("forced PIDs = %v, want Listener [4242] only", got)
+			}
+			if got := table.PolitePIDs(); len(got) != 0 {
+				t.Fatalf("polite PIDs = %v, want none", got)
+			}
+		})
+	}
+}
+
+func TestScopeFlags_LastFlagWins(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		wantPIDs []int
+		wantPeer bool
+	}{
+		{name: "--all then --listen", args: []string{"--all", "--listen", "8080"}, wantPIDs: []int{4242}, wantPeer: false},
+		{name: "--listen then --all", args: []string{"--listen", "--all", "8080"}, wantPIDs: []int{4242, 99}, wantPeer: true},
+		{name: "-a then -l", args: []string{"-a", "-l", "8080"}, wantPIDs: []int{4242}, wantPeer: false},
+		{name: "-l then -a", args: []string{"-l", "-a", "8080"}, wantPIDs: []int{4242, 99}, wantPeer: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			table := memory.New(
+				memory.Occupant{PID: 4242, Port: 8080, Name: "node", Kind: proctable.Listener},
+				memory.Occupant{PID: 99, Port: 8080, Name: "curl", Kind: proctable.Peer},
+			)
+
+			stdout, stderr, exit := run(t, table, tc.args...)
+			if exit != 0 {
+				t.Fatalf("exit code = %d, want 0", exit)
+			}
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want empty", stderr)
+			}
+			if strings.Contains(stdout, "curl") != tc.wantPeer {
+				t.Fatalf("stdout = %q, wantPeer=%v", stdout, tc.wantPeer)
+			}
+			got := table.ForcedPIDs()
+			if len(got) != len(tc.wantPIDs) {
+				t.Fatalf("forced PIDs = %v, want %v", got, tc.wantPIDs)
+			}
+			for i, pid := range tc.wantPIDs {
+				if got[i] != pid {
+					t.Fatalf("forced PIDs = %v, want %v", got, tc.wantPIDs)
+				}
+			}
+			if got := table.PolitePIDs(); len(got) != 0 {
+				t.Fatalf("polite PIDs = %v, want none", got)
+			}
+		})
+	}
+}
+
+func TestDryRun_RespectsResolvedScopeWithoutSignalling(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		wantPeer bool
+	}{
+		{name: "dry-run --all", args: []string{"--dry-run", "--all", "8080"}, wantPeer: true},
+		{name: "dry-run -a", args: []string{"-n", "-a", "8080"}, wantPeer: true},
+		{name: "dry-run --listen", args: []string{"--dry-run", "--listen", "8080"}, wantPeer: false},
+		{name: "dry-run --all then --listen", args: []string{"-n", "--all", "--listen", "8080"}, wantPeer: false},
+		{name: "dry-run --listen then --all", args: []string{"-n", "--listen", "--all", "8080"}, wantPeer: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			table := memory.New(
+				memory.Occupant{PID: 4242, Port: 8080, Name: "node", Kind: proctable.Listener},
+				memory.Occupant{PID: 99, Port: 8080, Name: "curl", Kind: proctable.Peer},
+			)
+
+			stdout, stderr, exit := run(t, table, tc.args...)
+			if exit != 0 {
+				t.Fatalf("exit code = %d, want 0", exit)
+			}
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want empty", stderr)
+			}
+			if !strings.Contains(stdout, "Port 8080  PID 4242  node") {
+				t.Fatalf("stdout = %q, want Listener listed", stdout)
+			}
+			if strings.Contains(stdout, "curl") != tc.wantPeer {
+				t.Fatalf("stdout = %q, wantPeer=%v", stdout, tc.wantPeer)
+			}
+			if strings.Contains(stdout, "Killed") {
+				t.Fatalf("stdout = %q, want no kill summary", stdout)
+			}
+			if got := table.ForcedPIDs(); len(got) != 0 {
+				t.Fatalf("forced PIDs = %v, want none", got)
+			}
+			if got := table.PolitePIDs(); len(got) != 0 {
+				t.Fatalf("polite PIDs = %v, want none", got)
+			}
+		})
 	}
 }
 

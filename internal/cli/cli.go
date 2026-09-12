@@ -15,19 +15,23 @@ var Version = "0.0.0-dev"
 
 const helpText = `Usage: killport [flags] <port> [port...]
 
-Free a TCP Port by terminating its Listener (TCP LISTEN Occupant).
+Free a TCP Port by terminating its Occupant. By default that is a Listener
+(TCP LISTEN); --all also includes Peers.
 
 Flags:
   -h, --help       Show this help and exit; no Port required
   -V, --version    Print the version and exit; no Port required
   -n, --dry-run    List Occupants without signalling
   -v, --verbose    Show each Occupant's full command line
+  -a, --all        Target Listeners and Peers on the named Ports
+  -l, --listen     Target Listeners only (default)
 
 Examples:
   killport 8080
   killport 3000 8080
   killport -n 3000 8080
   killport -n -v 8080
+  killport --all 8080
 `
 
 func Run(args []string, table proctable.ProcessTable, stdout, stderr io.Writer) int {
@@ -57,7 +61,7 @@ func Run(args []string, table proctable.ProcessTable, stdout, stderr io.Writer) 
 	signalled := map[int]struct{}{}
 	killed := 0
 	for _, port := range ports {
-		occupants, err := table.List(port, proctable.ListenersOnly)
+		occupants, err := table.List(port, parsed.scope)
 		if err != nil {
 			fmt.Fprintln(stderr, err.Error())
 			return 1
@@ -115,11 +119,15 @@ type parsedArgs struct {
 	version bool
 	dryRun  bool
 	verbose bool
+	scope   proctable.Scope
 	ports   []string
 }
 
 func parseArgs(args []string) (parsedArgs, error) {
-	parsed := parsedArgs{ports: make([]string, 0, len(args))}
+	parsed := parsedArgs{
+		ports: make([]string, 0, len(args)),
+		scope: proctable.ListenersOnly,
+	}
 	for _, arg := range args {
 		switch arg {
 		case "-h", "--help":
@@ -130,6 +138,10 @@ func parseArgs(args []string) (parsedArgs, error) {
 			parsed.dryRun = true
 		case "-v", "--verbose":
 			parsed.verbose = true
+		case "-a", "--all":
+			parsed.scope = proctable.ListenersAndPeers
+		case "-l", "--listen":
+			parsed.scope = proctable.ListenersOnly
 		default:
 			if strings.HasPrefix(arg, "-") && arg != "-" {
 				return parsedArgs{}, fmt.Errorf("Unknown flag: %s\nSee killport --help", arg)
