@@ -2,7 +2,7 @@
 
 Free a TCP Port by terminating its Occupant.
 
-`killport` is a local Developer tool. Name one or more Ports; by default it finds the Listeners (TCP LISTEN) and terminates them immediately with SIGKILL. Pass `--all` to also terminate Peers.
+`killport` is a local Developer tool. Name one or more Ports; by default it finds the Listeners (TCP LISTEN) and terminates them immediately (SIGKILL on Unix, force-terminate on Windows). Pass `--all` to also terminate Peers. The same `killport` command works on macOS, Linux, and Windows (the Windows file is `killport.exe`).
 
 ## Usage
 
@@ -25,7 +25,7 @@ Killed 1 Occupant with SIGKILL.
 
 `-a` / `--all` targets Listeners and Peers (non-LISTEN TCP) on the named Ports. `-l` / `--listen` forces Listener-only targeting (the default), including to undo `--all` in the same command. If both appear, the last one wins.
 
-`-s` / `--soft` sends SIGTERM first, then SIGKILL after 3 seconds only if the Occupant is still alive. `-w` / `--wait` does not return until matching Occupants are gone or 10 seconds pass. `-i` / `--interactive` asks for confirmation only when more than one PID would be signalled. Combined shorts work: `killport -s -w 8080`.
+`-s` / `--soft` sends a polite terminate first (SIGTERM on Unix), then a forced kill after 3 seconds only if the Occupant is still alive. `-w` / `--wait` does not return until matching Occupants are gone or 10 seconds pass. `-i` / `--interactive` asks for confirmation only when more than one PID would be signalled. Combined shorts work: `killport -s -w 8080`.
 
 An already-free Port is success: `killport` prints that nothing is listening and exits 0.
 
@@ -37,11 +37,16 @@ By default, connected Peers are left alone.
 
 Missing or invalid Ports (not an integer in 1–65535) print an English error on stderr and exit non-zero.
 
-If the Developer cannot kill an Occupant, `killport` names it and prints the next command to run. It never elevates itself:
+If the Developer cannot kill an Occupant, `killport` names it and prints the next step. It never elevates itself. On Unix that is `sudo`; on Windows, re-run from an elevated terminal:
 
 ```
 Permission denied for nginx (PID 1) on Port 80.
 Re-run with: sudo killport 80
+```
+
+```
+Permission denied for nginx (PID 1) on Port 80.
+Re-run from an elevated terminal: killport 80
 ```
 
 ## Install

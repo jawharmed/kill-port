@@ -3,11 +3,12 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/jawharmed/kill-port/internal/cli"
+	"github.com/jawharmed/kill-port/internal/windows"
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "Windows is not supported yet.")
-	os.Exit(1)
+	os.Exit(cli.Run(os.Args[1:], windows.New(), os.Stdin, os.Stdout, os.Stderr))
 }

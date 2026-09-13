@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -353,7 +354,7 @@ func TestListener_IsTerminatedWithForcedKillAndReported(t *testing.T) {
 	}
 }
 
-func TestPermissionDenied_NamesOccupantShowsSudoAndExitsNonZero(t *testing.T) {
+func TestPermissionDenied_NamesOccupantShowsHowToRerunAndExitsNonZero(t *testing.T) {
 	table := memory.New(memory.Occupant{
 		PID:      1,
 		Port:     80,
@@ -373,7 +374,14 @@ func TestPermissionDenied_NamesOccupantShowsSudoAndExitsNonZero(t *testing.T) {
 	if !strings.Contains(stderr, "Permission denied for nginx (PID 1) on Port 80.") {
 		t.Fatalf("stderr = %q, want Occupant named", stderr)
 	}
-	if !strings.Contains(stderr, "Re-run with: sudo killport 80") {
+	if runtime.GOOS == "windows" {
+		if !strings.Contains(stderr, "Re-run from an elevated terminal: killport 80") {
+			t.Fatalf("stderr = %q, want elevated-terminal rerun", stderr)
+		}
+		if strings.Contains(stderr, "sudo") {
+			t.Fatalf("stderr = %q, want no sudo on Windows", stderr)
+		}
+	} else if !strings.Contains(stderr, "Re-run with: sudo killport 80") {
 		t.Fatalf("stderr = %q, want next sudo command", stderr)
 	}
 	if got := table.ForcedPIDs(); len(got) != 0 {

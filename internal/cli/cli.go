@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -273,10 +274,18 @@ func writeSignalError(stderr io.Writer, args []string, occupant proctable.Occupa
 	var denied proctable.PermissionError
 	if errors.As(err, &denied) {
 		fmt.Fprintf(stderr, "Permission denied for %s (PID %d) on Port %d.\n", occupant.Name, occupant.PID, occupant.Port)
-		fmt.Fprintf(stderr, "Re-run with: sudo killport %s\n", strings.Join(args, " "))
+		fmt.Fprintln(stderr, rerunHint(args))
 		return
 	}
 	fmt.Fprintln(stderr, err.Error())
+}
+
+func rerunHint(args []string) string {
+	joined := strings.Join(args, " ")
+	if runtime.GOOS == "windows" {
+		return "Re-run from an elevated terminal: killport " + joined
+	}
+	return "Re-run with: sudo killport " + joined
 }
 
 func writeKilled(stdout io.Writer, result killResult) {
