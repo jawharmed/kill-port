@@ -1,0 +1,13 @@
+{
+  "version": "0.0.0",
+  "description": "Free a TCP Port by terminating its Occupant",
+  "homepage": "https://github.com/jawharmed/kill-port",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/jawharmed/kill-port/releases/download/v0.0.0/killport_Windows_x86_64.zip",
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bin": "killport.exe"
+    }
+  }
+}

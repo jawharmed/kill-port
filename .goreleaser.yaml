@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: killport
+
+builds:
+  - id: killport
+    main: ./cmd/killport
+    binary: killport
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/jawharmed/kill-port/internal/cli.Version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: linux
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: killport
+    formats: [tar.gz]
+    wrap_in_directory: false
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: LICENSE
+      - src: README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: jawharmed
+    name: kill-port
+
+brews:
+  - name: killport
+    ids: [killport]
+    homepage: https://github.com/jawharmed/kill-port
+    description: Free a TCP Port by terminating its Occupant
+    license: MIT
+    directory: Formula
+    skip_upload: auto
+    install: |
+      bin.install "killport"
+    test: |
+      assert_match "killport version", shell_output("#{bin}/killport --version")
+    repository:
+      owner: jawharmed
+      name: kill-port
+
+scoops:
+  - name: killport
+    ids: [killport]
+    homepage: https://github.com/jawharmed/kill-port
+    description: Free a TCP Port by terminating its Occupant
+    license: MIT
+    directory: bucket
+    skip_upload: auto
+    repository:
+      owner: jawharmed
+      name: kill-port
