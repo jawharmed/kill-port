@@ -2,14 +2,17 @@ package memory
 
 import "github.com/jawharmed/kill-port/internal/proctable"
 
-// Occupant is a fake Occupant for CLI tests, including a permission bit.
+// Occupant is a fake Occupant for CLI tests, including a permission bit
+// and liveness knobs for --soft / --wait.
 type Occupant struct {
-	PID      int
-	Port     proctable.Port
-	Name     string
-	Command  string
-	Kind     proctable.Kind
-	DenyKill bool
+	PID                  int
+	Port                 proctable.Port
+	Name                 string
+	Command              string
+	Kind                 proctable.Kind
+	DenyKill             bool
+	DieOnPolite          bool
+	StayAliveAfterForced bool
 }
 
 // Table is an in-memory process-table adapter. Tests observe which PIDs
@@ -33,6 +36,9 @@ func (t *Table) List(port proctable.Port, scope proctable.Scope) ([]proctable.Oc
 		if occupant.Kind == proctable.Peer && scope == proctable.ListenersOnly {
 			continue
 		}
+		if t.gone(occupant) {
+			continue
+		}
 		found = append(found, proctable.Occupant{
 			PID:     occupant.PID,
 			Port:    occupant.Port,
@@ -53,13 +59,27 @@ func (t *Table) SignalForced(pid int) error {
 }
 
 func (t *Table) Alive(pid int) bool {
-	for _, signalled := range t.forced {
-		if signalled == pid {
-			return false
+	for _, occupant := range t.occupants {
+		if occupant.PID == pid && !t.gone(occupant) {
+			return true
 		}
 	}
-	for _, occupant := range t.occupants {
-		if occupant.PID == pid {
+	return false
+}
+
+func (t *Table) gone(occupant Occupant) bool {
+	if occupant.StayAliveAfterForced {
+		return false
+	}
+	if t.wasSignalled(t.forced, occupant.PID) {
+		return true
+	}
+	return occupant.DieOnPolite && t.wasSignalled(t.polite, occupant.PID)
+}
+
+func (t *Table) wasSignalled(signalled []int, pid int) bool {
+	for _, signalledPID := range signalled {
+		if signalledPID == pid {
 			return true
 		}
 	}

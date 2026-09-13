@@ -10,5 +10,5 @@ import (
 )
 
 func main() {
-	os.Exit(cli.Run(os.Args[1:], unix.New(), os.Stdout, os.Stderr))
+	os.Exit(cli.Run(os.Args[1:], unix.New(), os.Stdin, os.Stdout, os.Stderr))
 }
